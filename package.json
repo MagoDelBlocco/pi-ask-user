@@ -1,0 +1,14 @@
+{
+  "name": "ask-user",
+  "version": "1.0.0",
+  "description": "Interactive ask_user tool for pi-coding-agent with searchable split-pane selection UI, multi-select, freeform input, desktop notifications, and overlay/inline display modes",
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.74.0",
+    "@earendil-works/pi-tui": ">=0.74.0",
+    "@sinclair/typebox": "*"
+  }
+}
