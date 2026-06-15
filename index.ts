@@ -47,6 +47,37 @@ function StringEnum<const T extends readonly string[]>(
 	});
 }
 
+// ── Abort helpers ────────────────────────────────────────────────────────────
+
+const ABORTED = Symbol("aborted");
+
+/**
+ * Race a UI interaction against an abort signal. The underlying dialog promise
+ * cannot be cancelled, but once aborted we stop waiting on it and treat the
+ * interaction as cancelled.
+ */
+async function raceAbort<T>(
+	promise: Promise<T>,
+	signal?: AbortSignal,
+): Promise<T | typeof ABORTED> {
+	if (!signal) return promise;
+	if (signal.aborted) return ABORTED;
+	return new Promise<T | typeof ABORTED>((resolve) => {
+		const onAbort = () => resolve(ABORTED);
+		signal.addEventListener("abort", onAbort, { once: true });
+		promise.then(
+			(value) => {
+				signal.removeEventListener("abort", onAbort);
+				resolve(value);
+			},
+			() => {
+				signal.removeEventListener("abort", onAbort);
+				resolve(ABORTED);
+			},
+		);
+	});
+}
+
 // ── RPC/headless fallback ────────────────────────────────────────────────────
 
 async function askViaDialogs(
@@ -58,18 +89,22 @@ async function askViaDialogs(
 	allowFreeform: boolean,
 	allowComment: boolean,
 	timeout?: number,
+	signal?: AbortSignal,
 ): Promise<AskUIResult | null> {
 	const dialogOpts = timeout ? { timeout } : undefined;
 	const prompt = context ? `${question}\n\nContext:\n${context}` : question;
 
 	if (allowMultiple) {
-		const optionList = formatOptionsForMessage(options);
-		const rawSelections = (await ui.input(
-			`${prompt}\n\nOptions (select one or more):\n${optionList}`,
-			"Type your selection(s)...",
-			dialogOpts,
-		)) as string | undefined;
-		if (isCancelledInput(rawSelections)) return null;
+		const rawSelections = await raceAbort(
+			ui.input(
+				`${prompt}\n\nOptions (select one or more):\n${formatOptionsForMessage(options)}`,
+				"Type your selection(s)...",
+				dialogOpts,
+			) as Promise<string | undefined>,
+			signal,
+		);
+		if (rawSelections === ABORTED || isCancelledInput(rawSelections))
+			return null;
 
 		const selections = parseDialogSelections(rawSelections);
 		if (selections.length === 0) return null;
@@ -78,29 +113,37 @@ async function askViaDialogs(
 			return createSelectionResponse(selections);
 		}
 
-		const comment = (await ui.input(
-			`${prompt}\n\nSelected options:\n${selections.join("\n")}`,
-			"Optional comment (press Enter to skip)...",
-			dialogOpts,
-		)) as string | undefined;
-		return createSelectionResponse(selections, comment);
+		const comment = await raceAbort(
+			ui.input(
+				`${prompt}\n\nSelected options:\n${selections.join("\n")}`,
+				"Optional comment (press Enter to skip)...",
+				dialogOpts,
+			) as Promise<string | undefined>,
+			signal,
+		);
+		return createSelectionResponse(
+			selections,
+			comment === ABORTED ? undefined : comment,
+		);
 	}
 
 	const selectOptions = options.map((o) => o.title);
 	if (allowFreeform) selectOptions.push(FREEFORM_SENTINEL);
 
-	const selected = (await ui.select(prompt, selectOptions, dialogOpts)) as
-		| string
-		| undefined;
-	if (isCancelledInput(selected)) return null;
+	const selected = await raceAbort(
+		ui.select(prompt, selectOptions, dialogOpts) as Promise<string | undefined>,
+		signal,
+	);
+	if (selected === ABORTED || isCancelledInput(selected)) return null;
 
 	if (selected === FREEFORM_SENTINEL) {
-		const answer = (await ui.input(
-			prompt,
-			"Type your answer...",
-			dialogOpts,
-		)) as string | undefined;
-		if (isCancelledInput(answer)) return null;
+		const answer = await raceAbort(
+			ui.input(prompt, "Type your answer...", dialogOpts) as Promise<
+				string | undefined
+			>,
+			signal,
+		);
+		if (answer === ABORTED || isCancelledInput(answer)) return null;
 		return createFreeformResponse(answer);
 	}
 
@@ -108,12 +151,18 @@ async function askViaDialogs(
 		return createSelectionResponse([selected]);
 	}
 
-	const comment = (await ui.input(
-		`${prompt}\n\nSelected option:\n${selected}`,
-		"Optional comment (press Enter to skip)...",
-		dialogOpts,
-	)) as string | undefined;
-	return createSelectionResponse([selected], comment);
+	const comment = await raceAbort(
+		ui.input(
+			`${prompt}\n\nSelected option:\n${selected}`,
+			"Optional comment (press Enter to skip)...",
+			dialogOpts,
+		) as Promise<string | undefined>,
+		signal,
+	);
+	return createSelectionResponse(
+		[selected],
+		comment === ABORTED ? undefined : comment,
+	);
 }
 
 // ── Extension entry point ────────────────────────────────────────────────────
@@ -281,12 +330,17 @@ export default function (pi: ExtensionAPI) {
 				const prompt = normalizedContext
 					? `${question}\n\nContext:\n${normalizedContext}`
 					: question;
-				const answer = await ctx.ui.input(
-					prompt,
-					"Type your answer...",
-					timeout ? { timeout } : undefined,
+				notifyUser("Pi: question for you", question);
+				const answer = await raceAbort(
+					ctx.ui.input(
+						prompt,
+						"Type your answer...",
+						timeout ? { timeout } : undefined,
+					) as Promise<string | undefined>,
+					signal,
 				);
-				const response = createFreeformResponse(answer);
+				const response =
+					answer === ABORTED ? null : createFreeformResponse(answer);
 
 				if (!response) {
 					return {
@@ -340,6 +394,7 @@ export default function (pi: ExtensionAPI) {
 			let result: AskUIResult | null;
 			let overlayHandle: OverlayHandle | undefined;
 			let removeOverlayInputListener: (() => void) | undefined;
+			let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
 			let hasAnnouncedHide = false;
 
 			try {
@@ -355,7 +410,7 @@ export default function (pi: ExtensionAPI) {
 					}
 
 					if (timeout && timeout > 0) {
-						setTimeout(() => done(null), timeout);
+						timeoutTimer = setTimeout(() => done(null), timeout);
 					}
 
 					return new AskComponent(
@@ -420,6 +475,7 @@ export default function (pi: ExtensionAPI) {
 						allowFreeform,
 						allowComment,
 						timeout,
+						signal,
 					);
 				}
 			} catch (error) {
@@ -433,6 +489,7 @@ export default function (pi: ExtensionAPI) {
 					details: { error: message },
 				};
 			} finally {
+				if (timeoutTimer) clearTimeout(timeoutTimer);
 				removeOverlayInputListener?.();
 			}
 

@@ -59,6 +59,7 @@ The agent calls `ask_user` automatically when it encounters ambiguity. You can a
 **Single-select:**
 - `type` — fuzzy filter options
 - `↑` / `↓` / `Tab` / `Shift+Tab` / `Ctrl+J` / `Ctrl+K` — navigate
+- `1`–`9` — jump to option by number
 - `Enter` — select
 - `Esc` — clear filter / cancel
 - `Backspace` — erase filter character

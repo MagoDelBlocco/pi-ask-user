@@ -25,6 +25,8 @@ const DEFAULT_OVERLAY_TOGGLE_KEY = "alt+o";
 const DEFAULT_COMMENT_TOGGLE_KEY = "ctrl+g";
 const FREEFORM_SENTINEL = "\u270f\ufe0f Type custom response...";
 const COMMENT_TOGGLE_LABEL = "Add extra context after selection";
+const FREEFORM_TITLE = "Type something.";
+const FREEFORM_HINT = "Enter a custom response";
 
 // ── Option normalization ─────────────────────────────────────────────────────
 
@@ -84,16 +86,6 @@ export function formatResponseSummary(response: AskResponse): string {
 	if (response.kind === "freeform") return response.text;
 	const selections = response.selections.join(", ");
 	return response.comment ? `${selections} — ${response.comment}` : selections;
-}
-
-export function buildCommentPrompt(
-	prompt: string,
-	selections: string[],
-): string {
-	const label =
-		selections.length === 1 ? "Selected option" : "Selected options";
-	const lines = selections.map((s) => `- ${s}`).join("\n");
-	return `${prompt}\n\n${label}:\n${lines}`;
 }
 
 export function parseDialogSelections(input: string): string[] {
@@ -281,6 +273,8 @@ export function notifyUser(summary: string, body: string): void {
 export {
 	FREEFORM_SENTINEL,
 	COMMENT_TOGGLE_LABEL,
+	FREEFORM_TITLE,
+	FREEFORM_HINT,
 	ASK_OVERLAY_MAX_HEIGHT_RATIO,
 };
 

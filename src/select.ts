@@ -16,8 +16,13 @@ import {
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import type { QuestionOption, ResolvedShortcut } from "./types";
-import { renderSingleSelectRows, type AnnotatedRow } from "./layout";
-import { COMMENT_TOGGLE_LABEL, safeMarkdownTheme } from "./utils";
+import { renderSingleSelectRows } from "./layout";
+import {
+	COMMENT_TOGGLE_LABEL,
+	FREEFORM_HINT,
+	FREEFORM_TITLE,
+	safeMarkdownTheme,
+} from "./utils";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -251,8 +256,8 @@ export class MultiSelectList implements Component {
 			}
 
 			if (this.isFreeformRow(i)) {
-				const label = theme.fg("text", theme.bold("Type something."));
-				const desc = theme.fg("muted", "Enter a custom response");
+				const label = theme.fg("text", theme.bold(FREEFORM_TITLE));
+				const desc = theme.fg("muted", FREEFORM_HINT);
 				const line = `${prefix}   ${label} ${theme.fg("dim", "—")} ${desc}`;
 				lines.push(truncateToWidth(line, width, ""));
 				continue;

@@ -6,7 +6,6 @@
 import {
 	Container,
 	type Component,
-	type EditorTheme,
 	type KeybindingsManager,
 	type Theme,
 	type TUI,
@@ -30,9 +29,9 @@ import { BoxBorderBottom, BoxBorderTop } from "./borders";
 import { MultiSelectList, WrappedSingleSelectList } from "./select";
 import {
 	ASK_OVERLAY_MAX_HEIGHT_RATIO,
-	COMMENT_TOGGLE_LABEL,
 	createEditorTheme,
-	createSelectListTheme,
+	createFreeformResponse,
+	createSelectionResponse,
 	formatKeyList,
 	keybindingHint,
 	literalHint,
@@ -122,14 +121,8 @@ export class AskComponent extends Container {
 		this.shortcuts = shortcuts;
 		this.onDone = onDone;
 
-		// Layout skeleton
-		this.addChild(
-			new BoxBorderTop(
-				(s) => theme.fg("accent", s),
-				"ask_user",
-				(s) => theme.fg("dim", theme.bold(s)),
-			),
-		);
+		// Layout skeleton. The top/bottom box borders are not children — they are
+		// drawn at full width directly in render(), wrapping the children below.
 		this.addChild(new Spacer(1));
 
 		this.titleText = new Text("", 1, 0);
@@ -160,13 +153,6 @@ export class AskComponent extends Container {
 		this.addChild(this.helpText);
 
 		this.addChild(new Spacer(1));
-		this.addChild(
-			new BoxBorderBottom(
-				(s) => theme.fg("accent", s),
-				`v${ASK_USER_VERSION}`,
-				(s) => theme.fg("dim", s),
-			),
-		);
 
 		this.updateStaticText();
 		this.showSelectMode();
@@ -191,33 +177,34 @@ export class AskComponent extends Container {
 			this.ensureSingleSelectList().setMaxVisibleRows(availableOptionRows);
 		}
 
-		// Render children at the inner width (excluding side border characters)
-		const rawLines = super.render(innerWidth);
+		// Render children at the inner width (excluding side border characters).
+		const innerLines = super.render(innerWidth);
 
-		// First and last lines are the top/bottom box borders — pass through at full width.
-		// All inner lines get wrapped with side borders and a background color.
 		const borderColor = (s: string) => this.theme.fg("accent", s);
 		const titleColor = (s: string) => this.theme.fg("dim", this.theme.bold(s));
+		const labelColor = (s: string) => this.theme.fg("dim", s);
 		const bgFn = (s: string) => this.theme.bg("selectedBg", s);
-		return rawLines.map((line, index) => {
-			if (index === 0 || index === rawLines.length - 1) {
-				if (index === 0)
-					return bgFn(
-						new BoxBorderTop(borderColor, "ask_user", titleColor).render(
-							width,
-						)[0],
-					);
-				return bgFn(
-					new BoxBorderBottom(borderColor, `v${ASK_USER_VERSION}`, (s) =>
-						this.theme.fg("dim", s),
-					).render(width)[0],
-				);
-			}
+
+		// Draw the top/bottom borders once at full width, wrapping each inner line
+		// with side borders and a background color.
+		const top = bgFn(
+			new BoxBorderTop(borderColor, "ask_user", titleColor).render(width)[0],
+		);
+		const bottom = bgFn(
+			new BoxBorderBottom(
+				borderColor,
+				`v${ASK_USER_VERSION}`,
+				labelColor,
+			).render(width)[0],
+		);
+		const body = innerLines.map((line) => {
 			const padded = truncateToWidth(line, innerWidth, "", true);
 			return bgFn(
 				`${borderColor(BOX_BORDER_LEFT)}${padded}${borderColor(BOX_BORDER_RIGHT)}`,
 			);
 		});
+
+		return [top, ...body, bottom];
 	}
 
 	private countWrappedLines(text: string, width: number): number {
@@ -541,6 +528,3 @@ export class AskComponent extends Container {
 		this.tui.requestRender();
 	}
 }
-
-// Re-export response helpers used by AskComponent
-import { createFreeformResponse, createSelectionResponse } from "./utils";

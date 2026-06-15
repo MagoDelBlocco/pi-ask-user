@@ -4,6 +4,7 @@
  */
 
 import type { QuestionOption } from "./types";
+import { COMMENT_TOGGLE_LABEL, FREEFORM_HINT, FREEFORM_TITLE } from "./utils";
 
 export interface AnnotatedRow {
 	line: string;
@@ -90,8 +91,8 @@ function buildItemBlocks(
 	hideDescriptions = false,
 ): ItemBlock[] {
 	const normalizedWidth = Math.max(12, width);
-	const freeformLabel = "Type something. — Enter a custom response";
-	const commentToggleLabel = `${commentEnabled ? "[✓]" : "[ ]"} Add extra context after selection`;
+	const freeformLabel = `${FREEFORM_TITLE} — ${FREEFORM_HINT}`;
+	const commentToggleLabel = `${commentEnabled ? "[✓]" : "[ ]"} ${COMMENT_TOGGLE_LABEL}`;
 	const allItems: ListItem[] = options.map((option) => ({
 		type: "option",
 		option,
