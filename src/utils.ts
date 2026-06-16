@@ -259,12 +259,17 @@ import { spawn } from "node:child_process";
 
 export function notifyUser(summary: string, body: string): void {
 	try {
-		spawn("notify-send", [summary, body], {
+		const child = spawn("notify-send", [summary, body], {
 			detached: true,
 			stdio: "ignore",
-		}).unref();
+		});
+		// A missing notify-send surfaces as an asynchronous "error" event
+		// (ENOENT), not a synchronous throw. Without this listener Node would
+		// rethrow it as an uncaught exception, so swallow it here.
+		child.on("error", () => {});
+		child.unref();
 	} catch {
-		// notify-send not available — silently skip.
+		// Defensive: spawn can also throw synchronously on invalid arguments.
 	}
 }
 
