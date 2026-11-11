@@ -10,7 +10,7 @@ Registers the `ask_user` tool, enabling the agent to ask you clarifying question
 - **Multi-select** with checkboxes
 - **Freeform text** fallback when no options fit
 - **Optional comment** after selection for extra context
-- **Desktop notifications** via `notify-send` (Linux)
+- **Desktop notifications** via Kitty OSC 99 (including through SSH)
 - **Overlay mode** (centered modal) with hide/show toggle
 - **Inline mode** (non-modal, in-place rendering)
 - **Timeout** with auto-dismiss countdown
